@@ -1,21 +1,99 @@
-function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Sheet1");
-  const data = sheet.getDataRange().getValues();
-  const result = data.slice(1).map(row => ({
-    name: row[0],
-    balance: row[1],
-    dueDate: row[2],
-    website: row[3],
-    history: typeof row[4] === 'string'
-      ? row[4].split(',').map(Number)
-      : typeof row[4] === 'number'
-        ? [row[4]]
-        : [row[1]]
-  }));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finance Overview</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: auto; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f0f0f0; }
+    button { padding: 5px 10px; margin-right: 5px; }
+    canvas { max-width: 100%; }
+    form { margin-top: 30px; }
+    input[type="text"], input[type="number"], input[type="date"] { padding: 5px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Finance Overview</h1>
 
-  const callback = e.parameter.callback || 'callback';
-  const jsonp = `${callback}(${JSON.stringify(result)});`;
+  <table id="billsTable">
+    <thead>
+      <tr>
+        <th>Bill Name</th>
+        <th>Current Balance</th>
+        <th>Due Date</th>
+        <th>Website</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-  return ContentService.createTextOutput(jsonp)
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
-}
+  <h2>Balance History</h2>
+  <canvas id="balanceChart"></canvas>
+
+  <h2>Add New Bill</h2>
+  <form id="billForm">
+    <input type="text" id="name" placeholder="Bill Name" required>
+    <input type="number" id="balance" placeholder="Balance" step="0.01" required>
+    <input type="date" id="dueDate" required>
+    <input type="text" id="website" placeholder="Website URL" required>
+    <button type="submit">Submit</button>
+  </form>
+
+  <script>
+    const API_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID_HERE/exec';
+
+    function handleJSONPResponse(data) {
+      const tbody = document.querySelector('#billsTable tbody');
+      tbody.innerHTML = '';
+      const labels = [];
+      const datasets = [];
+
+      data.forEach(bill => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${bill.name}</td>
+          <td>$${parseFloat(bill.balance).toFixed(2)}</td>
+          <td>${bill.dueDate}</td>
+          <td><button onclick="window.open('${bill.website}', '_blank')">Open</button></td>
+        `;
+        tbody.appendChild(row);
+
+        if (!datasets.find(ds => ds.label === bill.name)) {
+          datasets.push({
+            label: bill.name,
+            data: bill.history ? bill.history.map(Number) : [parseFloat(bill.balance)],
+            borderColor: '#' + Math.floor(Math.random()*16777215).toString(16),
+            fill: false
+          });
+        }
+        if (bill.history && bill.history.length > labels.length) {
+          labels.length = 0;
+          bill.history.forEach((_, i) => labels.push(`Month ${i+1}`));
+        }
+      });
+
+      new Chart(document.getElementById('balanceChart'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function loadBillsJSONP() {
+      const script = document.createElement('script');
+      script.src = API_URL + '?callback=handleJSONPResponse';
+      document.body.appendChild(script);
+    }
+
+    document.getElementById('billForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      alert('Form submission via JSONP is not supported. Please implement a backend proxy or use Google Forms integration for write access.');
+    });
+
+    loadBillsJSONP();
+  </script>
+</body>
+</html>
